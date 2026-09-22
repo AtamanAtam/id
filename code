@@ -12,7 +12,6 @@ warnings.filterwarnings('ignore')
 try:
     import kagglehub
     from kagglehub import KaggleDatasetAdapter
-
     KAGGLE_AVAILABLE = True
     print("Бібліотека kagglehub доступна")
 except ImportError:
@@ -34,32 +33,6 @@ def load_pgm_data():
         df['Date'] = pd.to_datetime(df['Date'], format='%d-%b-%Y')
         for col in ['Platinum', 'Palladium', 'Rhodium', 'Iridium', 'Ruthenium']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
-        return df
-    else:
-        print(f"Файл {filename} не знайдено. Створюємо реалістичні тестові дані...")
-        dates = pd.date_range(start='1994-09-09', end='2024-09-09', freq='D')
-        np.random.seed(42)
-        df = pd.DataFrame({'Date': dates})
-        trend = np.linspace(400, 1000, len(dates))
-        noise = np.random.randn(len(dates)) * 30
-        df['Platinum'] = trend + noise
-        df['Platinum'] = df['Platinum'].clip(lower=200)
-        trend = np.linspace(150, 1000, len(dates))
-        noise = np.random.randn(len(dates)) * 25
-        df['Palladium'] = trend + noise
-        df['Palladium'] = df['Palladium'].clip(lower=100)
-        trend = np.linspace(800, 4500, len(dates))
-        noise = np.random.randn(len(dates)) * 200
-        df['Rhodium'] = trend + noise
-        df['Rhodium'] = df['Rhodium'].clip(lower=400)
-        trend = np.linspace(70, 4500, len(dates))
-        noise = np.random.randn(len(dates)) * 50
-        df['Iridium'] = trend + noise
-        df['Iridium'] = df['Iridium'].clip(lower=50)
-        trend = np.linspace(18, 400, len(dates))
-        noise = np.random.randn(len(dates)) * 5
-        df['Ruthenium'] = trend + noise
-        df['Ruthenium'] = df['Ruthenium'].clip(lower=10)
         return df
 
 
@@ -137,39 +110,36 @@ ftse_data = download_yahoo_data('^FTSE', start_date, end_date)
 
 
 # Завдання 4
-def get_kitco_data_from_kaggle(df_kaggle):
-    if df_kaggle is not None:
-        last_row = df_kaggle.iloc[0]
-        gold_price = last_row['Gold AM Fix'] if 'Gold AM Fix' in df_kaggle.columns else None
-        silver_price = last_row['Silver Fix'] if 'Silver Fix' in df_kaggle.columns else None
+def load_kitco_data():
+    filename = 'kitco_fix.csv'
 
-        if gold_price is not None and silver_price is not None:
-            kitco_data = pd.DataFrame({
-                'Date': [datetime.now().strftime('%Y-%m-%d')],
-                'Gold_kitco': [gold_price],
-                'Silver_kitco': [silver_price]
-            })
-            kitco_data['Date'] = pd.to_datetime(kitco_data['Date'])
-            print(f"\nОновлено дані Kitco: Gold={gold_price}, Silver={silver_price}")
-            return kitco_data
-
-    print("\nДля оновлення даних з Kitco введіть поточні ціни:")
-    try:
-        gold_price = float(input("Введіть поточну ціну золота (USD/troy oz): "))
-        silver_price = float(input("Введіть поточну ціну срібла (USD/troy oz): "))
-        kitco_data = pd.DataFrame({
-            'Date': [datetime.now().strftime('%Y-%m-%d')],
-            'Gold_kitco': [gold_price],
-            'Silver_kitco': [silver_price]
+    if os.path.exists(filename):
+        print("Завантаження даних Kitco з локального файлу...")
+        df = pd.read_csv(filename)
+        df['Date'] = pd.to_datetime(df['Date'])
+        for col in ['Gold', 'Silver', 'Platinum', 'Palladium']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        df = df[['Date', 'Gold', 'Silver', 'Platinum', 'Palladium']]
+        df = df.rename(columns={
+            'Gold': 'Gold_kitco',
+            'Silver': 'Silver_kitco',
+            'Platinum': 'Platinum_kitco',
+            'Palladium': 'Palladium_kitco'
         })
-        kitco_data['Date'] = pd.to_datetime(kitco_data['Date'])
-        return kitco_data
-    except:
-        print("Помилка вводу. Пропускаємо оновлення Kitco.")
+        print(f"Завантажено {len(df)} рядків з Kitco")
+        return df
+    else:
+        print(f"Файл {filename} не знайдено.")
         return None
 
 
-kitco_data = get_kitco_data_from_kaggle(df_kaggle)
+kitco_data = load_kitco_data()
+
+if kitco_data is not None:
+    print("\nДані з Kitco:")
+    print(f"Форма: {kitco_data.shape}")
+    print(f"Період: від {kitco_data['Date'].min()} до {kitco_data['Date'].max()}")
+    print(kitco_data.head())
 
 
 # Завдання 5
@@ -231,6 +201,7 @@ sample_data = get_price_range(combined_data, '2024-08-01', '2024-09-01')
 print(f"\nВибірка за серпень 2024:")
 print(sample_data.head())
 
+
 # Завдання 8
 if combined_data is not None:
     for col in ['Platinum AM Fix', 'Platinum PM Fix', 'Palladium AM Fix', 'Palladium PM Fix']:
@@ -238,23 +209,17 @@ if combined_data is not None:
             combined_data[col] = pd.to_numeric(combined_data[col], errors='coerce')
 
     if 'Platinum AM Fix' in combined_data.columns and 'Platinum PM Fix' in combined_data.columns:
-        combined_data['Platinum Kaggle'] = combined_data[['Platinum AM Fix', 'Platinum PM Fix']].mean(axis=1,
-                                                                                                      skipna=True)
+        combined_data['Platinum Kaggle'] = combined_data[['Platinum AM Fix', 'Platinum PM Fix']].mean(axis=1, skipna=True)
     if 'Palladium AM Fix' in combined_data.columns and 'Palladium PM Fix' in combined_data.columns:
-        combined_data['Palladium Kaggle'] = combined_data[['Palladium AM Fix', 'Palladium PM Fix']].mean(axis=1,
-                                                                                                         skipna=True)
+        combined_data['Palladium Kaggle'] = combined_data[['Palladium AM Fix', 'Palladium PM Fix']].mean(axis=1, skipna=True)
 
     plt.figure(figsize=(15, 6))
-
     if 'Platinum' in combined_data.columns:
-        plt.plot(combined_data.index, combined_data['Platinum'],
-                 label='Platinum (Matthey)', linewidth=2, alpha=0.8)
+        plt.plot(combined_data.index, combined_data['Platinum'], label='Platinum (Matthey)', linewidth=2, alpha=0.8)
     if 'Platinum Kaggle' in combined_data.columns:
         kaggle_platinum = combined_data['Platinum Kaggle'].dropna()
         if not kaggle_platinum.empty:
-            plt.plot(kaggle_platinum.index, kaggle_platinum,
-                     label='Platinum (Kaggle)', linewidth=2, alpha=0.8)
-
+            plt.plot(kaggle_platinum.index, kaggle_platinum, label='Platinum (Kaggle)', linewidth=2, alpha=0.8)
     plt.title('Порівняння цін на Platinum з різних джерел', fontsize=16, fontweight='bold')
     plt.xlabel('Дата', fontsize=12)
     plt.ylabel('Ціна (USD/troy oz)', fontsize=12)
@@ -265,16 +230,12 @@ if combined_data is not None:
     plt.show()
 
     plt.figure(figsize=(15, 6))
-
     if 'Palladium' in combined_data.columns:
-        plt.plot(combined_data.index, combined_data['Palladium'],
-                 label='Palladium (Matthey)', linewidth=2, alpha=0.8)
+        plt.plot(combined_data.index, combined_data['Palladium'], label='Palladium (Matthey)', linewidth=2, alpha=0.8)
     if 'Palladium Kaggle' in combined_data.columns:
         kaggle_palladium = combined_data['Palladium Kaggle'].dropna()
         if not kaggle_palladium.empty:
-            plt.plot(kaggle_palladium.index, kaggle_palladium,
-                     label='Palladium (Kaggle)', linewidth=2, alpha=0.8)
-
+            plt.plot(kaggle_palladium.index, kaggle_palladium, label='Palladium (Kaggle)', linewidth=2, alpha=0.8)
     plt.title('Порівняння цін на Palladium з різних джерел', fontsize=16, fontweight='bold')
     plt.xlabel('Дата', fontsize=12)
     plt.ylabel('Ціна (USD/troy oz)', fontsize=12)
@@ -298,7 +259,6 @@ if combined_data is not None:
         plt.figure(figsize=(15, 8))
         for metal in available_metals:
             plt.plot(monthly_averages.index, monthly_averages[metal], label=metal, linewidth=2)
-
         plt.title('Місячні середні ціни на дорогоцінні метали', fontsize=16, fontweight='bold')
         plt.xlabel('Дата', fontsize=12)
         plt.ylabel('Середня ціна (USD/troy oz)', fontsize=12)
@@ -309,18 +269,14 @@ if combined_data is not None:
         plt.show()
 
     plt.figure(figsize=(15, 6))
-
     if 'Gold AM Fix' in combined_data.columns:
         gold_data = combined_data['Gold AM Fix'].dropna()
         if not gold_data.empty:
             plt.plot(gold_data.index, gold_data, label='Gold (Kaggle)', linewidth=2, alpha=0.8)
-
     if 'Gold_kitco' in combined_data.columns:
-        kitco_data_plot = combined_data['Gold_kitco'].dropna()
-        if not kitco_data_plot.empty:
-            plt.scatter(kitco_data_plot.index, kitco_data_plot,
-                        label='Gold (Kitco)', s=100, color='red', zorder=5)
-
+        kitco_gold = combined_data['Gold_kitco'].dropna()
+        if not kitco_gold.empty:
+            plt.plot(kitco_gold.index, kitco_gold, label='Gold (Kitco)', linewidth=2, alpha=0.8)
     plt.title('Порівняння цін на Золото з Kaggle та Kitco', fontsize=16, fontweight='bold')
     plt.xlabel('Дата', fontsize=12)
     plt.ylabel('Ціна (USD/troy oz)', fontsize=12)
@@ -329,6 +285,7 @@ if combined_data is not None:
     plt.xticks(rotation=45)
     plt.tight_layout()
     plt.show()
+
 
 # Завдання 9
 if combined_data is not None:
